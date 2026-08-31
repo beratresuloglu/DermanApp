@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Derman.Api/Derman.Api.csproj" />
+    <Project Path="src/Derman.Core/Derman.Core.csproj" />
+    <Project Path="src/Derman.Web/Derman.Web.csproj" />
+  </Folder>
+</Solution>
