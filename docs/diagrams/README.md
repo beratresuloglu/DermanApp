@@ -1,11 +1,11 @@
 ### 📐 Sistem Mimarisi & Diyagramlar
 
-- **Mimari & API:** [Sistem Mimarisi](./diagrams/architecture/SystemArchitecture.md) | [API Uç Noktaları](./diagrams/architecture/APIEndpoints.md)
-- **Veritabanı & Sınıf:** [Veritabanı Şeması](./diagrams/database/DatabaseDiagram.md) | [UML Sınıf Diyagramı](./diagrams/UmlClassDiagram.md) | [Durum Diyagramı](./diagrams/StateDiagram.md)
+- **Mimari & API:** [Sistem Mimarisi](./architecture/SystemArchitecture.md) | [API Uç Noktaları](./architecture/APIEndpoints.md)
+- **Veritabanı & Sınıf:** [Veritabanı Şeması](./database/DatabaseDiagram.md) | [UML Sınıf Diyagramı](./UmlClassDiagram.md) | [Durum Diyagramı](./StateDiagram.md)
 - **Sıralı İşlem (Sequence) Akışları:**
-  - [AI Bölgesel Önceliklendirme](./diagrams/sequence/SequenceDiagramAIRegionalPriority.md)
-  - [Talep Oluşturma Akışı](./diagrams/sequence/SequenceDiagramCreatingRequest.md)
-  - [OTP Doğrulama](./diagrams/sequence/SequenceDiagramOTPVerification.md)
-  - [Çift Taraflı Onay](./diagrams/sequence/SequenceDiagramTwoWayConfirmation.md)
-  - [Engelleme / Şikayet](./diagrams/sequence/SequenceDiagramBlock.md)
-  - [Mesajlaşma](./diagrams/sequence/SequenceDiagramMessage.md)
+  - [AI Bölgesel Önceliklendirme](./sequence/SequenceDiagramAIRegionalPriority.md)
+  - [Talep Oluşturma Akışı](./sequence/SequenceDiagramCreatingRequest.md)
+  - [OTP Doğrulama](./sequence/SequenceDiagramOTPVerification.md)
+  - [Çift Taraflı Onay](./sequence/SequenceDiagramTwoWayConfirmation.md)
+  - [Engelleme / Şikayet](./sequence/SequenceDiagramBlock.md)
+  - [Mesajlaşma](./sequence/SequenceDiagramMessage.md)
