@@ -18,10 +18,13 @@ public class HelpRequestsController : ControllerBase
     private readonly AppDbContext _db;
     private readonly IAiTriageService _triageService;
 
-    public HelpRequestsController(AppDbContext db, IAiTriageService triageService)
+    private readonly IAiPriorityService _priorityService;
+
+    public HelpRequestsController(AppDbContext db, IAiTriageService triageService, IAiPriorityService priorityService)
     {
         _db = db;
         _triageService = triageService;
+        _priorityService = priorityService;
     }
 
     private Guid CurrentUserId =>
@@ -32,6 +35,10 @@ public class HelpRequestsController : ControllerBase
     [Authorize(Policy = "AfetzedeOnly")]
     public async Task<IActionResult> Create(CreateHelpRequestDto dto)
     {
+        var currentUser = await _db.Users.FindAsync(CurrentUserId);
+        if (currentUser is Derman.Api.Identity.ApplicationUser appUser && appUser.IsBlocked)
+            return Forbid();
+
         var request = new HelpRequest
         {
             Id = Guid.NewGuid(),
@@ -77,6 +84,28 @@ public class HelpRequestsController : ControllerBase
         return Ok(requests.Select(r => ToDto(r, fuzzLocation: true)));
     }
 
+    [HttpGet("nearby/priority")]
+    [Authorize(Policy = "YardimciOnly")]
+    public async Task<IActionResult> GetNearbyWithPriority([FromQuery] decimal lat, [FromQuery] decimal lng, [FromQuery] decimal radiusKm = 10)
+    {
+        var delta = radiusKm / 111m;
+
+        var requests = await _db.HelpRequests
+            .Where(r => r.Status == RequestStatus.Acik)
+            .Where(r => r.Latitude >= lat - delta && r.Latitude <= lat + delta)
+            .Where(r => r.Longitude >= lng - delta && r.Longitude <= lng + delta)
+            .ToListAsync();
+
+        var (summary, priorityIds) = await _priorityService.AnalyzeRegionAsync(requests);
+
+        return Ok(new
+        {
+            Summary = summary,
+            PriorityRequestIds = priorityIds,
+            Requests = requests.Select(r => ToDto(r, fuzzLocation: true))
+        });
+    }
+
     [HttpPut("{id}/status")]
     [Authorize(Policy = "AfetzedeOnly")]
     public async Task<IActionResult> UpdateStatus(Guid id, [FromBody] RequestStatus status)
@@ -93,6 +122,17 @@ public class HelpRequestsController : ControllerBase
         return Ok(ToDto(request));
     }
 
+    [HttpGet("mine")]
+    [Authorize(Policy = "AfetzedeOnly")]
+    public async Task<IActionResult> GetMine()
+    {
+        var requests = await _db.HelpRequests
+            .Where(r => r.UserId == CurrentUserId)
+            .OrderByDescending(r => r.CreatedAt)
+            .ToListAsync();
+
+        return Ok(requests.Select(r => ToDto(r)));
+    }
     private static HelpRequestResponseDto ToDto(HelpRequest r, bool fuzzLocation = false)
     {
         var (lat, lng) = fuzzLocation

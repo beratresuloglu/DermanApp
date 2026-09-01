@@ -5,7 +5,7 @@ using Derman.Core.Entities;
 using Derman.Core.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-
+using Microsoft.EntityFrameworkCore;
 namespace Derman.Api.Controllers;
 
 [ApiController]
@@ -28,6 +28,10 @@ public class MatchesController : ControllerBase
     [Authorize(Policy = "YardimciOnly")]
     public async Task<IActionResult> Create(CreateMatchDto dto)
     {
+        var currentUser = await _db.Users.FindAsync(CurrentUserId);
+        if (currentUser is Derman.Api.Identity.ApplicationUser appUser && appUser.IsBlocked)
+            return Forbid();
+
         var request = await _db.HelpRequests.FindAsync(dto.HelpRequestId);
         if (request is null) return NotFound("Talep bulunamadı.");
         if (request.Status != RequestStatus.Acik) return BadRequest("Bu talep artık açık değil.");
@@ -101,6 +105,22 @@ public class MatchesController : ControllerBase
         return Ok(ToDto(match));
     }
 
+    [HttpGet("by-request/{requestId}")]
+    [Authorize(Policy = "AfetzedeOnly")]
+    public async Task<IActionResult> GetByRequest(Guid requestId)
+    {
+        var request = await _db.HelpRequests.FindAsync(requestId);
+        if (request is null || request.UserId != CurrentUserId) return Forbid();
+
+        var match = await _db.Matches
+            .Where(m => m.HelpRequestId == requestId)
+            .OrderByDescending(m => m.RequestedAt)
+            .FirstOrDefaultAsync();
+
+        if (match is null) return NotFound();
+
+        return Ok(ToDto(match));
+    }
     private static MatchResponseDto ToDto(Match m) => new(
         m.Id, m.HelpRequestId, m.HelperUserId,
         m.Status.ToString(), m.RequestedAt, m.ConfirmedAt);

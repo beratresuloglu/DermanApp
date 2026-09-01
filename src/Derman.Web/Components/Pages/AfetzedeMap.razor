@@ -1,0 +1,135 @@
+@page "/afetzede/harita"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Harita</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container-fluid mt-4">
+        <h3>Civardaki Yardım Teklifleri ve Kurumlar</h3>
+
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label class="form-label">Konumun (Enlem)</label>
+                <input type="number" step="0.0001" class="form-control" @bind="_lat" />
+            </div>
+            <div class="col-auto">
+                <label class="form-label">Konumun (Boylam)</label>
+                <input type="number" step="0.0001" class="form-control" @bind="_lng" />
+            </div>
+            <div class="col-auto d-flex align-items-end">
+                <button class="btn btn-primary" @onclick="LoadNearby">Yakındakileri Göster</button>
+            </div>
+        </div>
+
+        <div id="@_mapId" style="height: 500px; width: 100%; border-radius: 8px;"></div>
+
+        <p class="text-muted mt-2">
+            @_offers.Count teklif, @_resources.Count kurum bulundu.
+        </p>
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private readonly string _mapId = $"map-{Guid.NewGuid():N}";
+    private bool _mapInitialized;
+
+    private double _lat = 37.0662;
+    private double _lng = 37.3833;
+
+    private List<HelpOfferResponseDto> _offers = new();
+    private List<ResourceResponseDto> _resources = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("role")?.Value != "Afetzede")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _isAuthorized = true;
+        _isChecking = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _isAuthorized)
+        {
+            await JS.InvokeVoidAsync("leafletInterop.initMap", _mapId, _lat, _lng, 12, null, false);
+            _mapInitialized = true;
+            await LoadNearby();
+        }
+    }
+
+    private async Task LoadNearby()
+    {
+        if (!_mapInitialized) return;
+
+        var latStr = _lat.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var lngStr = _lng.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var offersResponse = await Api.GetAsync($"api/help-requests/nearby?lat={latStr}&lng={lngStr}&radiusKm=15");
+        if (offersResponse.IsSuccessStatusCode)
+        {
+            _offers = await offersResponse.Content.ReadFromJsonAsync<List<HelpOfferResponseDto>>() ?? new();
+        }
+
+        var resourcesResponse = await Api.GetAsync($"api/resources/nearby?lat={_lat}&lng={_lng}&radiusKm=15");
+        if (resourcesResponse.IsSuccessStatusCode)
+        {
+            _resources = await resourcesResponse.Content.ReadFromJsonAsync<List<ResourceResponseDto>>() ?? new();
+        }
+
+        await JS.InvokeVoidAsync("leafletInterop.clearMarkers", _mapId);
+
+        foreach (var offer in _offers)
+        {
+            var popup = $"<b>{offer.Category}</b><br/>Miktar: {offer.Quantity}";
+            await JS.InvokeVoidAsync("leafletInterop.addMarker", _mapId, (double)offer.Latitude, (double)offer.Longitude, popup,
+"offer");
+        }
+
+        foreach (var resource in _resources)
+        {
+            var popup = $"<b>{resource.Name}</b><br/>{resource.Type}<br/>{resource.Address}";
+            await JS.InvokeVoidAsync("leafletInterop.addMarker", _mapId, (double)resource.Latitude, (double)resource.Longitude,
+popup, "resource");
+        }
+
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_mapInitialized)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("leafletInterop.destroyMap", _mapId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Sayfa zaten kapanıyor, JS bağlantısı koptu — güvenle yok sayılabilir
+            }
+        }
+    }
+}

@@ -1,0 +1,110 @@
+@page "/afetzede/taleplerim"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Taleplerim</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4">
+        <h3>Taleplerim</h3>
+
+        @if (_requests.Count == 0)
+        {
+            <p class="text-muted">Henüz bir talep oluşturmadın.</p>
+        }
+        else
+        {
+            @foreach (var req in _requests)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">@req.Category — <span class="badge bg-secondary">@req.Status</span></h5>
+                        <p class="card-text">@req.Description</p>
+                        <p class="text-muted">Aciliyet: @req.SuggestedUrgency — @req.UrgencyReasoning</p>
+
+                        @if (req.Status == "OnayBekliyor")
+                        {
+                            <div class="alert alert-warning">
+                                Bir yardımcı bu talebi üstlenmek istiyor.
+                                <button class="btn btn-sm btn-success ms-2" @onclick="() => Confirm(req.Id)">Onayla</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => Reject(req.Id)">Reddet</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private List<HelpRequestResponseDto> _requests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("role")?.Value != "Afetzede")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _isAuthorized = true;
+        _isChecking = false;
+
+        await LoadRequests();
+    }
+
+    private async Task LoadRequests()
+    {
+        var response = await Api.GetAsync("api/help-requests/mine");
+        if (response.IsSuccessStatusCode)
+        {
+            _requests = await response.Content.ReadFromJsonAsync<List<HelpRequestResponseDto>>() ?? new();
+        }
+    }
+
+    private async Task Confirm(Guid requestId)
+    {
+        var matchResponse = await Api.GetAsync($"api/matches/by-request/{requestId}");
+        if (!matchResponse.IsSuccessStatusCode) return;
+
+        var match = await matchResponse.Content.ReadFromJsonAsync<MatchResponseDto>();
+        if (match is null) return;
+
+        var response = await Api.PutAsync<object?>($"api/matches/{match.Id}/confirm", null);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadRequests();
+        }
+    }
+
+    private async Task Reject(Guid requestId)
+    {
+        var matchResponse = await Api.GetAsync($"api/matches/by-request/{requestId}");
+        if (!matchResponse.IsSuccessStatusCode) return;
+
+        var match = await matchResponse.Content.ReadFromJsonAsync<MatchResponseDto>();
+        if (match is null) return;
+
+        var response = await Api.PutAsync<object?>($"api/matches/{match.Id}/reject", null);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadRequests();
+        }
+    }
+}

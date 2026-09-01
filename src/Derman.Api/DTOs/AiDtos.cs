@@ -29,3 +29,5 @@ public class GeminiCandidate
 
 // Modelin ürettiği JSON'ı bu şekle çözeceğiz
 public record TriageResult(string Urgency, string Reasoning);
+
+public record RegionPriorityResult(string Summary, List<string> PriorityRequestIds);

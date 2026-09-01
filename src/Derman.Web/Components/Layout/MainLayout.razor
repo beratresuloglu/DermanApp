@@ -1,4 +1,8 @@
 ﻿@inherits LayoutComponentBase
+@using Derman.Web.Services
+@inject JwtAuthStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@implements IDisposable
 
 <div class="page">
     <div class="sidebar">
@@ -7,6 +11,15 @@
 
     <main>
         <div class="top-row px-4">
+            @if (_isAuthenticated)
+            {
+                <span class="me-3">@_fullName</span>
+                <a href="#" @onclick="HandleLogout" @onclick:preventDefault="true">Çıkış Yap</a>
+            }
+            else
+            {
+                <a href="/login">Giriş Yap</a>
+            }
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
         </div>
 
@@ -21,3 +34,43 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private bool _isAuthenticated;
+    private string _fullName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthStateProvider.AuthenticationStateChanged += OnAuthStateChanged;
+        await RefreshAuthState();
+    }
+
+    private async void OnAuthStateChanged(Task<Microsoft.AspNetCore.Components.Authorization.AuthenticationState> task)
+    {
+        await RefreshAuthState();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshAuthState()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        _isAuthenticated = user.Identity?.IsAuthenticated == true;
+        if (_isAuthenticated)
+        {
+            _fullName = user.FindFirst("fullName")?.Value ?? "Kullanıcı";
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        await AuthStateProvider.NotifyLogoutAsync();
+        Navigation.NavigateTo("/login", forceLoad: true);
+    }
+
+    public void Dispose()
+    {
+        AuthStateProvider.AuthenticationStateChanged -= OnAuthStateChanged;
+    }
+}

@@ -1,0 +1,80 @@
+@page "/verify-otp"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@inject IHttpClientFactory HttpClientFactory
+@inject NavigationManager Navigation
+
+<PageTitle>Kod Doğrulama</PageTitle>
+
+<div class="container mt-5" style="max-width: 480px;">
+    <h3>E-postana Gönderilen Kodu Gir</h3>
+    <p class="text-muted">@_email adresine gönderilen 6 haneli kodu girin.</p>
+
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger">@_errorMessage</div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="HandleVerify">
+        <div class="mb-3">
+            <label class="form-label">Doğrulama Kodu</label>
+            <InputText class="form-control" @bind-Value="_model.Code" maxlength="6" />
+        </div>
+
+        <button type="submit" class="btn btn-primary w-100" disabled="@_isLoading">
+            @(_isLoading ? "Doğrulanıyor..." : "Doğrula")
+        </button>
+    </EditForm>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    public string? Email { get; set; }
+
+    private string _email = string.Empty;
+    private VerifyFormModel _model = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+
+    protected override void OnInitialized()
+    {
+        _email = Email ?? string.Empty;
+    }
+
+    private async Task HandleVerify()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var client = HttpClientFactory.CreateClient("DermanApi");
+            var request = new VerifyOtpRequest(_email, _model.Code);
+
+            var response = await client.PostAsJsonAsync("api/auth/verify-otp", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Navigation.NavigateTo("/login");
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _errorMessage = "Doğrulama başarısız: " + error;
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Bir hata oluştu: " + ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    public class VerifyFormModel
+    {
+        public string Code { get; set; } = string.Empty;
+    }
+}

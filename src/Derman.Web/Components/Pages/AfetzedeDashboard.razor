@@ -1,0 +1,79 @@
+@page "/afetzede"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Afetzede Paneli</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4">
+        <h2>Afetzede Paneli</h2>
+        <p>Hoş geldin, @_fullName.</p>
+
+        <div class="row mt-4">
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Talep Oluştur</h5>
+                        <p class="card-text">Yeni bir yardım talebi oluştur.</p>
+                        <a href="/afetzede/yeni-talep" class="btn btn-primary">Talep Oluştur</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Haritayı Gör</h5>
+                        <p class="card-text">Yakınındaki yardım tekliflerini ve kurumları gör.</p>
+                        <a href="/afetzede/harita" class="btn btn-primary">Haritayı Aç</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Taleplerim</h5>
+                        <p class="card-text">Oluşturduğun talepleri ve durumlarını gör.</p>
+                        <a href="/afetzede/taleplerim" class="btn btn-primary">Taleplerim</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private string _fullName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var role = user.FindFirst("role")?.Value;
+        if (role != "Afetzede")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _fullName = user.FindFirst("fullName")?.Value ?? "Kullanıcı";
+        _isAuthorized = true;
+        _isChecking = false;
+    }
+}

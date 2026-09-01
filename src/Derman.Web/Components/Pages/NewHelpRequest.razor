@@ -1,0 +1,129 @@
+@page "/afetzede/yeni-talep"
+@rendermode InteractiveServer
+@using Derman.Web.Components.Shared
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Yeni Talep</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4" style="max-width: 600px;">
+        <h3>Yeni Yardım Talebi Oluştur</h3>
+
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger">@_errorMessage</div>
+        }
+
+        @if (_createdRequest is not null)
+        {
+            <div class="alert alert-success">
+                <strong>Talebin oluşturuldu!</strong><br />
+                Önerilen aciliyet: <strong>@_createdRequest.SuggestedUrgency</strong><br />
+                @_createdRequest.UrgencyReasoning
+            </div>
+            <a href="/afetzede" class="btn btn-secondary">Panele Dön</a>
+        }
+        else
+        {
+            <EditForm Model="_model" OnValidSubmit="HandleSubmit">
+                <div class="mb-3">
+                    <label class="form-label">Kategori</label>
+                    <InputText class="form-control" @bind-Value="_model.Category" placeholder="Örn: Su ve Battaniye" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Açıklama</label>
+                    <InputTextArea class="form-control" rows="4" @bind-Value="_model.Description"
+                                   placeholder="İhtiyacını detaylı şekilde açıkla, bu bilgi aciliyet değerlendirmesi için kullanılacak" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Konum Seç</label>
+                    <LocationPicker InitialLatitude="_model.Latitude" InitialLongitude="_model.Longitude"
+                                    OnLocationSelected="OnLocationChanged" />
+                </div>
+
+                <button type="submit" class="btn btn-primary" disabled="@_isLoading">
+                    @(_isLoading ? "Gönderiliyor..." : "Talebi Oluştur")
+                </button>
+            </EditForm>
+        }
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private FormModel _model = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+    private HelpRequestResponseDto? _createdRequest;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("role")?.Value != "Afetzede")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _isAuthorized = true;
+        _isChecking = false;
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+
+        try
+        {
+            var dto = new CreateHelpRequestDto(_model.Category, _model.Description, _model.Latitude, _model.Longitude);
+            var response = await Api.PostAsync("api/help-requests", dto);
+
+            if (response.IsSuccessStatusCode)
+            {
+                _createdRequest = await response.Content.ReadFromJsonAsync<HelpRequestResponseDto>();
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                _errorMessage = $"Talep oluşturulamadı: [{(int)response.StatusCode} {response.StatusCode}] {error}";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = "Bir hata oluştu: " + ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    public class FormModel
+    {
+        public string Category { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public decimal Latitude { get; set; } = 37.0662m;
+        public decimal Longitude { get; set; } = 37.3833m;
+    }
+    private void OnLocationChanged((decimal Lat, decimal Lng) location)
+    {
+        _model.Latitude = location.Lat;
+        _model.Longitude = location.Lng;
+    }
+}

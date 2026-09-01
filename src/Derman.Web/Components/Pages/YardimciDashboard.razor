@@ -1,0 +1,79 @@
+@page "/yardimci"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Yardımcı Paneli</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4">
+        <h2>Yardımcı Paneli</h2>
+        <p>Hoş geldin, @_fullName.</p>
+
+        <div class="row mt-4">
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Teklif Oluştur</h5>
+                        <p class="card-text">Sahip olduğun malzemeleri paylaş.</p>
+                        <a href="/yardimci/yeni-teklif" class="btn btn-primary">Teklif Oluştur</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Haritayı Gör</h5>
+                        <p class="card-text">Yakınındaki açık talepleri gör.</p>
+                        <a href="/yardimci/harita" class="btn btn-primary">Haritayı Aç</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Tekliflerim</h5>
+                        <p class="card-text">Oluşturduğun teklifleri gör.</p>
+                        <a href="/yardimci/tekliflerim" class="btn btn-primary">Tekliflerim</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private string _fullName = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var role = user.FindFirst("role")?.Value;
+        if (role != "Yardimci")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _fullName = user.FindFirst("fullName")?.Value ?? "Kullanıcı";
+        _isAuthorized = true;
+        _isChecking = false;
+    }
+}
