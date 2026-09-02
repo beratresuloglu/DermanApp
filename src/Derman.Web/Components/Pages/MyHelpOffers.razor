@@ -1,0 +1,66 @@
+@page "/yardimci/tekliflerim"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Tekliflerim</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4">
+        <h3>Tekliflerim</h3>
+
+        @if (_offers.Count == 0)
+        {
+            <p class="text-muted">Henüz bir teklif oluşturmadın.</p>
+        }
+        else
+        {
+            @foreach (var offer in _offers)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">@offer.Category — <span class="badge bg-secondary">@offer.Status</span></h5>
+                        <p class="card-text">Miktar: @offer.Quantity</p>
+                        <p class="text-muted">Oluşturulma: @offer.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</p>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private List<HelpOfferResponseDto> _offers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("role")?.Value != "Yardimci")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _isAuthorized = true;
+        _isChecking = false;
+
+        var response = await Api.GetAsync("api/help-offers/mine");
+        if (response.IsSuccessStatusCode)
+        {
+            _offers = await response.Content.ReadFromJsonAsync<List<HelpOfferResponseDto>>() ?? new();
+        }
+    }
+}

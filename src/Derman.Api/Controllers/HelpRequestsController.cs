@@ -144,4 +144,18 @@ public class HelpRequestsController : ControllerBase
             r.SuggestedUrgency?.ToString(), r.UrgencyReasoning,
             r.Status.ToString(), lat, lng, r.CreatedAt);
     }
+    [HttpGet("{id}/owner")]
+    public async Task<IActionResult> GetOwner(Guid id)
+    {
+        var request = await _db.HelpRequests.FindAsync(id);
+        if (request is null) return NotFound();
+
+        // Sadece bu talebin eşleşmesinde yer alan biri (Afetzede kendisi veya eşleşen Yardımcı) bu bilgiyi görebilir
+        var hasMatch = await _db.Matches.AnyAsync(m =>
+            m.HelpRequestId == id && (m.HelperUserId == CurrentUserId || request.UserId == CurrentUserId));
+
+        if (!hasMatch) return Forbid();
+
+        return Ok(request.UserId);
+    }
 }

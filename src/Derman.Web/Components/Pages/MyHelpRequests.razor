@@ -30,7 +30,10 @@ else if (_isAuthorized)
                     <div class="card-body">
                         <h5 class="card-title">@req.Category — <span class="badge bg-secondary">@req.Status</span></h5>
                         <p class="card-text">@req.Description</p>
-                        <p class="text-muted">Aciliyet: @req.SuggestedUrgency — @req.UrgencyReasoning</p>
+                        <p>
+                            <span class="badge @GetUrgencyBadgeClass(req.SuggestedUrgency)">@req.SuggestedUrgency</span>
+                            <small class="text-muted">@req.UrgencyReasoning</small>
+                        </p>
 
                         @if (req.Status == "OnayBekliyor")
                         {
@@ -39,6 +42,10 @@ else if (_isAuthorized)
                                 <button class="btn btn-sm btn-success ms-2" @onclick="() => Confirm(req.Id)">Onayla</button>
                                 <button class="btn btn-sm btn-danger" @onclick="() => Reject(req.Id)">Reddet</button>
                             </div>
+                        }
+                        @if (req.Status == "Ustlenildi" && _matchIds.ContainsKey(req.Id))
+                        {
+                            <a href="/chat/@_matchIds[req.Id]" class="btn btn-sm btn-outline-primary">Mesajlaş</a>
                         }
                     </div>
                 </div>
@@ -69,12 +76,27 @@ else if (_isAuthorized)
         await LoadRequests();
     }
 
+    private Dictionary<Guid, Guid> _matchIds = new();
+
     private async Task LoadRequests()
     {
         var response = await Api.GetAsync("api/help-requests/mine");
         if (response.IsSuccessStatusCode)
         {
             _requests = await response.Content.ReadFromJsonAsync<List<HelpRequestResponseDto>>() ?? new();
+
+            foreach (var req in _requests.Where(r => r.Status == "Ustlenildi"))
+            {
+                var matchResponse = await Api.GetAsync($"api/matches/by-request/{req.Id}");
+                if (matchResponse.IsSuccessStatusCode)
+                {
+                    var match = await matchResponse.Content.ReadFromJsonAsync<MatchResponseDto>();
+                    if (match is not null)
+                    {
+                        _matchIds[req.Id] = match.Id;
+                    }
+                }
+            }
         }
     }
 
@@ -107,4 +129,13 @@ else if (_isAuthorized)
             await LoadRequests();
         }
     }
+
+    private string GetUrgencyBadgeClass(string? urgency) => urgency switch
+    {
+        "Kritik" => "bg-danger",
+        "Orta" => "bg-warning text-dark",
+        "Dusuk" => "bg-success",
+        _ => "bg-secondary"
+    };
+
 }

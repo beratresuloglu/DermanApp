@@ -1,0 +1,82 @@
+@page "/yardimci/ustlendiklerim"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ApiClient Api
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>Üstlendiklerim</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4">
+        <h3>Üstlendiğim Talepler</h3>
+
+        @if (_matches.Count == 0)
+        {
+            <p class="text-muted">Henüz bir talep üstlenmedin.</p>
+        }
+        else
+        {
+            @foreach (var match in _matches)
+            {
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <span class="badge bg-secondary">@match.Status</span>
+                        </h5>
+                        <p class="text-muted">
+                            Talep tarihi: @match.RequestedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </p>
+
+                        @if (match.Status == "Bekliyor")
+                        {
+                            <p class="text-muted">Afetzede'nin onayı bekleniyor.</p>
+                        }
+                        else if (match.Status == "Onaylandi")
+                        {
+                            <a href="/chat/@match.Id" class="btn btn-sm btn-outline-primary">Mesajlaş</a>
+                        }
+                        else if (match.Status == "Reddedildi")
+                        {
+                            <p class="text-danger">Bu talep reddedildi.</p>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+}
+
+@code {
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private List<MatchResponseDto> _matches = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst("role")?.Value != "Yardimci")
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        _isAuthorized = true;
+        _isChecking = false;
+
+        var response = await Api.GetAsync("api/matches/mine");
+        if (response.IsSuccessStatusCode)
+        {
+            _matches = await response.Content.ReadFromJsonAsync<List<MatchResponseDto>>() ?? new();
+        }
+    }
+}

@@ -23,7 +23,7 @@ public class GeminiPriorityService : IAiPriorityService
 
         var jsonOptions = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
         var apiKey = _config["AI:GeminiApiKey"];
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}";
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={apiKey}";
 
         var requestList = string.Join("\n", nearbyRequests.Select(r =>
             $"- Id: {r.Id}, Kategori: {r.Category}, Açıklama: \"{r.Description}\", Aciliyet: {r.SuggestedUrgency}"));
@@ -44,6 +44,9 @@ public class GeminiPriorityService : IAiPriorityService
 
         try
         {
+            Console.WriteLine($"[AI PRIORITY DEBUG] URL: {url.Substring(0, Math.Min(80, url.Length))}...");
+            Console.WriteLine($"[AI PRIORITY DEBUG] ApiKey null mu: {string.IsNullOrEmpty(apiKey)}");
+
             var json = JsonSerializer.Serialize(requestBody, jsonOptions);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -71,8 +74,9 @@ public class GeminiPriorityService : IAiPriorityService
 
             return (result.Summary, priorityIds);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.WriteLine($"[AI PRIORITY HATA] {ex.GetType().Name}: {ex.Message}");
             return ("AI servisi şu anda yanıt veremedi.", new List<Guid>());
         }
     }

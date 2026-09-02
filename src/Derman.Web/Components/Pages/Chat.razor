@@ -1,0 +1,225 @@
+@page "/chat/{MatchId:guid}"
+@rendermode InteractiveServer
+@using Derman.Web.Models
+@using Derman.Web.Services
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@inject ApiClient Api
+@inject TokenService TokenService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+@inject IConfiguration Configuration
+@implements IAsyncDisposable
+
+<PageTitle>Mesajlaşma</PageTitle>
+
+@if (_isChecking)
+{
+    <p>Yükleniyor...</p>
+}
+else if (_isAuthorized)
+{
+    <div class="container mt-4" style="max-width: 700px;">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h3>Mesajlaşma</h3>
+            <button class="btn btn-sm btn-outline-danger" @onclick="() => _showReportModal = true">
+                Şikayet Et
+            </button>
+        </div>
+
+        @if (_showReportModal)
+        {
+            <div class="alert alert-secondary">
+                <h6>Bu kullanıcıyı şikayet et</h6>
+
+                @if (!string.IsNullOrEmpty(_reportMessage))
+                {
+                    <div class="alert alert-info py-2">@_reportMessage</div>
+                }
+
+                <textarea class="form-control mb-2" rows="2" @bind="_reportReason"
+                          placeholder="Şikayet sebebini kısaca açıkla"></textarea>
+                <button class="btn btn-sm btn-danger" @onclick="SubmitReport">Şikayeti Gönder</button>
+                <button class="btn btn-sm btn-secondary" @onclick="() => _showReportModal = false">İptal</button>
+            </div>
+        }
+        @if (!_isConnected)
+        {
+            <div class="alert alert-warning">Bağlanılıyor...</div>
+        }
+
+        <div class="border rounded p-3 mb-3" style="height: 400px; overflow-y: auto;" @ref="_chatBoxRef">
+            @foreach (var msg in _messages)
+            {
+                <div class="mb-2 @(msg.SenderId == _currentUserId ? "text-end" : "text-start")">
+                    <span class="badge @(msg.SenderId == _currentUserId ? "bg-primary" : "bg-secondary")">
+                        @msg.Content
+                    </span>
+                    <br />
+                    <small class="text-muted">@msg.SentAt.ToLocalTime().ToString("HH:mm")</small>
+                </div>
+            }
+        </div>
+
+        <div class="input-group">
+            <input class="form-control" @bind="_newMessage" @bind:event="oninput" @onkeydown="HandleKeyDown"
+                   placeholder="Mesajını yaz..." disabled="@(!_isConnected)" />
+            <button class="btn btn-primary" @onclick="SendMessage" disabled="@(!_isConnected)">Gönder</button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid MatchId { get; set; }
+
+    private bool _isChecking = true;
+    private bool _isAuthorized;
+    private bool _isConnected;
+    private Guid _currentUserId;
+    private string _newMessage = string.Empty;
+    private List<MessageDto> _messages = new();
+    private HubConnection? _hubConnection;
+    private ElementReference _chatBoxRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated != true)
+        {
+            Navigation.NavigateTo("/login");
+            return;
+        }
+
+        var idClaim = user.FindFirst("sub")?.Value ?? user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        _currentUserId = Guid.Parse(idClaim!);
+
+        _isAuthorized = true;
+        _isChecking = false;
+
+        await LoadMatchInfo();
+        await LoadHistory();
+        await ConnectToHub();
+    }
+
+    private async Task LoadMatchInfo()
+    {
+        var response = await Api.GetAsync($"api/matches/{MatchId}");
+        if (response.IsSuccessStatusCode)
+        {
+            var match = await response.Content.ReadFromJsonAsync<MatchResponseDto>();
+            if (match is not null)
+            {
+                // Karşı taraf: eğer ben helper isem karşı taraf request sahibi, değilsem helper
+                _otherUserId = match.HelperUserId == _currentUserId
+                    ? await GetRequestOwnerIdAsync(match.HelpRequestId)
+                    : match.HelperUserId;
+            }
+        }
+    }
+
+    private async Task<Guid> GetRequestOwnerIdAsync(Guid requestId)
+    {
+        // Not: Bu bilgi şu an HelpRequestResponseDto'da yok, backend'e küçük bir ekleme gerekiyor (aşağıda)
+        var response = await Api.GetAsync($"api/help-requests/{requestId}/owner");
+        if (response.IsSuccessStatusCode)
+        {
+            var result = await response.Content.ReadFromJsonAsync<Guid>();
+            return result;
+        }
+        return Guid.Empty;
+    }
+
+    private async Task LoadHistory()
+    {
+        var response = await Api.GetAsync($"api/matches/{MatchId}/messages");
+        if (response.IsSuccessStatusCode)
+        {
+            _messages = await response.Content.ReadFromJsonAsync<List<MessageDto>>() ?? new();
+        }
+    }
+
+    private async Task ConnectToHub()
+    {
+        var token = await TokenService.GetTokenAsync();
+        var apiBaseUrl = Configuration["ApiBaseUrl"] ?? "http://localhost:5123/";
+        var hubUrl = apiBaseUrl.TrimEnd('/') + "/hubs/chat";
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(hubUrl, options =>
+            {
+                options.AccessTokenProvider = () => Task.FromResult(token);
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<object>("ReceiveMessage", async (data) =>
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            var msg = System.Text.Json.JsonSerializer.Deserialize<MessageDto>(json,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (msg is not null)
+            {
+                _messages.Add(msg);
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+
+        await _hubConnection.StartAsync();
+        await _hubConnection.InvokeAsync("JoinMatch", MatchId);
+
+        _isConnected = true;
+        StateHasChanged();
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(_newMessage) || _hubConnection is null) return;
+
+        await _hubConnection.InvokeAsync("SendMessage", MatchId, _newMessage);
+        _newMessage = string.Empty;
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessage();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    private Guid _otherUserId;
+    private bool _showReportModal;
+    private string _reportReason = string.Empty;
+    private string? _reportMessage;
+
+    private async Task SubmitReport()
+    {
+        if (string.IsNullOrWhiteSpace(_reportReason) || _otherUserId == Guid.Empty) return;
+
+        var dto = new CreateReportDto(_otherUserId, _reportReason);
+        var response = await Api.PostAsync("api/reports", dto);
+
+        if (response.IsSuccessStatusCode)
+        {
+            _reportMessage = "Şikayetin alındı, incelenecek.";
+            _showReportModal = false;
+            _reportReason = string.Empty;
+        }
+        else
+        {
+            var error = await response.Content.ReadAsStringAsync();
+            _reportMessage = "Şikayet gönderilemedi: " + error;
+        }
+    }
+}

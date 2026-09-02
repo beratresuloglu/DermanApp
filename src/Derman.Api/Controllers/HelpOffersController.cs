@@ -77,4 +77,16 @@ public class HelpOffersController : ControllerBase
 
         return new(o.Id, o.Category, o.Quantity, o.Status.ToString(), lat, lng, o.CreatedAt);
     }
+
+    [HttpGet("mine")]
+    [Authorize(Policy = "YardimciOnly")]
+    public async Task<IActionResult> GetMine()
+    {
+        var offers = await _db.HelpOffers
+            .Where(o => o.UserId == CurrentUserId)
+            .OrderByDescending(o => o.CreatedAt)
+            .ToListAsync();
+
+        return Ok(offers.Select(o => ToDto(o)));
+    }
 }

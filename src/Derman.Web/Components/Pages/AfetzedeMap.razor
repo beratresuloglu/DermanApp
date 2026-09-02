@@ -87,13 +87,13 @@ else if (_isAuthorized)
         var latStr = _lat.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var lngStr = _lng.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        var offersResponse = await Api.GetAsync($"api/help-requests/nearby?lat={latStr}&lng={lngStr}&radiusKm=15");
+        var offersResponse = await Api.GetAsync($"api/help-offers/nearby?lat={latStr}&lng={lngStr}&radiusKm=15");
         if (offersResponse.IsSuccessStatusCode)
         {
             _offers = await offersResponse.Content.ReadFromJsonAsync<List<HelpOfferResponseDto>>() ?? new();
         }
 
-        var resourcesResponse = await Api.GetAsync($"api/resources/nearby?lat={_lat}&lng={_lng}&radiusKm=15");
+        var resourcesResponse = await Api.GetAsync($"api/resources/nearby?lat={latStr}&lng={lngStr}&radiusKm=15");
         if (resourcesResponse.IsSuccessStatusCode)
         {
             _resources = await resourcesResponse.Content.ReadFromJsonAsync<List<ResourceResponseDto>>() ?? new();

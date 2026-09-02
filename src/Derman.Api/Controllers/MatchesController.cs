@@ -124,4 +124,16 @@ public class MatchesController : ControllerBase
     private static MatchResponseDto ToDto(Match m) => new(
         m.Id, m.HelpRequestId, m.HelperUserId,
         m.Status.ToString(), m.RequestedAt, m.ConfirmedAt);
+
+    [HttpGet("mine")]
+    [Authorize(Policy = "YardimciOnly")]
+    public async Task<IActionResult> GetMine()
+    {
+        var matches = await _db.Matches
+            .Where(m => m.HelperUserId == CurrentUserId)
+            .OrderByDescending(m => m.RequestedAt)
+            .ToListAsync();
+
+        return Ok(matches.Select(ToDto));
+    }
 }
