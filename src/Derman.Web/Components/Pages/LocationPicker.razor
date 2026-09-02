@@ -1,0 +1,96 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<div id="@_elementId" style="height: @Height; width: 100%; border-radius: 8px;"></div>
+
+<div class="d-flex justify-content-between align-items-center mt-2">
+    <small class="text-muted">Seçilen konum: @SelectedLatitude.ToString("F4"), @SelectedLongitude.ToString("F4")</small>
+    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="UseMyLocation" disabled="@_isLocating">
+        @(_isLocating ? "Konum alınıyor..." : "📍 Konumumu Kullan")
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(_locationError))
+{
+    <small class="text-danger d-block mt-1">@_locationError</small>
+}
+
+@code {
+    [Parameter] public decimal InitialLatitude { get; set; } = 37.0662m;
+    [Parameter] public decimal InitialLongitude { get; set; } = 37.3833m;
+    [Parameter] public string Height { get; set; } = "300px";
+    [Parameter] public EventCallback<(decimal Lat, decimal Lng)> OnLocationSelected { get; set; }
+
+    public decimal SelectedLatitude { get; private set; }
+    public decimal SelectedLongitude { get; private set; }
+
+    private readonly string _elementId = $"map-{Guid.NewGuid():N}";
+    private DotNetObjectReference<LocationPicker>? _dotNetRef;
+    private bool _initialized;
+    private bool _isLocating;
+    private string? _locationError;
+
+    protected override void OnInitialized()
+    {
+        SelectedLatitude = InitialLatitude;
+        SelectedLongitude = InitialLongitude;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("leafletInterop.initMap",
+                _elementId, (double)InitialLatitude, (double)InitialLongitude, 13, _dotNetRef, true);
+            await JS.InvokeVoidAsync("leafletInterop.setSingleMarker",
+                _elementId, (double)InitialLatitude, (double)InitialLongitude);
+            _initialized = true;
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnMapClicked(double lat, double lng)
+    {
+        SelectedLatitude = (decimal)lat;
+        SelectedLongitude = (decimal)lng;
+
+        await JS.InvokeVoidAsync("leafletInterop.setSingleMarker", _elementId, lat, lng);
+        await OnLocationSelected.InvokeAsync((SelectedLatitude, SelectedLongitude));
+        StateHasChanged();
+    }
+
+    private async Task UseMyLocation()
+    {
+        _isLocating = true;
+        _locationError = null;
+        StateHasChanged();
+
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]>("leafletInterop.getCurrentPosition");
+            await OnMapClicked(coords[0], coords[1]);
+
+            await JS.InvokeVoidAsync("leafletInterop.map_setView", _elementId, coords[0], coords[1]);
+        }
+        catch (Exception)
+        {
+            _locationError = "Konumuna erişilemedi. Tarayıcı izinlerini kontrol et.";
+        }
+        finally
+        {
+            _isLocating = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_initialized)
+        {
+            await JS.InvokeVoidAsync("leafletInterop.destroyMap", _elementId);
+        }
+        _dotNetRef?.Dispose();
+    }
+}

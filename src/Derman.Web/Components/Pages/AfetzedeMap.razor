@@ -77,11 +77,38 @@ else if (_isAuthorized)
             await JS.InvokeVoidAsync("leafletInterop.initMap", _mapId, _lat, _lng, 12, null, false);
             _mapInitialized = true;
             await LoadNearby();
+            await ShowMyLiveLocation();
+        }
+    }
+
+    private async Task ShowMyLiveLocation()
+    {
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]>("leafletInterop.getCurrentPosition");
+            await JS.InvokeVoidAsync("leafletInterop.setLiveLocationMarker", _mapId, coords[0], coords[1]);
+        }
+        catch
+        {
+            // Konum izni verilmediyse sessizce geç, harita yine de çalışsın
         }
     }
 
     private async Task LoadNearby()
     {
+        foreach (var offer in _offers)
+        {
+            var popup = $"<b>{offer.Category}</b><br/>Miktar: {offer.Quantity}";
+            await JS.InvokeVoidAsync("leafletInterop.addMarker", _mapId, (double)offer.Latitude, (double)offer.Longitude, popup,
+        "offer");
+        }
+
+        foreach (var resource in _resources)
+        {
+            var popup = $"<b>{resource.Name}</b><br/>{resource.Type}<br/>{resource.Address}";
+            await JS.InvokeVoidAsync("leafletInterop.addMarker", _mapId, (double)resource.Latitude, (double)resource.Longitude,
+        popup, "resource");
+        }
         if (!_mapInitialized) return;
 
         var latStr = _lat.ToString(System.Globalization.CultureInfo.InvariantCulture);

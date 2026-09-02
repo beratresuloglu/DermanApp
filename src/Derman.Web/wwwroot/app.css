@@ -63,3 +63,28 @@ h1:focus {
         height: 350px !important;
     }
 }
+
+.live-dot {
+    position: absolute;
+    top: 3px; left: 3px;
+    width: 14px; height: 14px;
+    background: #0d6efd;
+    border: 2px solid white;
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0,0,0,0.4);
+    z-index: 2;
+}
+
+.live-pulse {
+    position: absolute;
+    top: 0; left: 0;
+    width: 20px; height: 20px;
+    background: rgba(13, 110, 253, 0.4);
+    border-radius: 50%;
+    animation: livePulseAnim 1.6s infinite ease-out;
+}
+
+@keyframes livePulseAnim {
+    0%   { transform: scale(0.6); opacity: 1; }
+    100% { transform: scale(2.2); opacity: 0; }
+}

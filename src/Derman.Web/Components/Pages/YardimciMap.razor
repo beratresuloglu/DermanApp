@@ -113,6 +113,20 @@ else if (_isAuthorized)
             await JS.InvokeVoidAsync("leafletInterop.initMap", _mapId, _lat, _lng, 12, null, false);
             _mapInitialized = true;
             await LoadNearby();
+            await ShowMyLiveLocation();
+        }
+    }
+
+    private async Task ShowMyLiveLocation()
+    {
+        try
+        {
+            var coords = await JS.InvokeAsync<double[]>("leafletInterop.getCurrentPosition");
+            await JS.InvokeVoidAsync("leafletInterop.setLiveLocationMarker", _mapId, coords[0], coords[1]);
+        }
+        catch
+        {
+            // Konum izni verilmediyse sessizce geç, harita yine de çalışsın
         }
     }
 
@@ -165,8 +179,9 @@ else if (_isAuthorized)
         foreach (var req in _requests)
         {
             var popup = $"<b>{req.Category}</b><br/>{req.Description}<br/>Aciliyet: {req.SuggestedUrgency}";
+            var iconType = (req.SuggestedUrgency ?? "default").ToLowerInvariant();
             await JS.InvokeVoidAsync("leafletInterop.addMarker", _mapId, (double)req.Latitude, (double)req.Longitude, popup,
-"request");
+    iconType);
         }
 
         StateHasChanged();

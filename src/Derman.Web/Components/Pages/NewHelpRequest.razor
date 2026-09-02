@@ -49,8 +49,8 @@ else if (_isAuthorized)
 
                 <div class="mb-3">
                     <label class="form-label">Konum Seç</label>
-                    <LocationPicker InitialLatitude="_model.Latitude" InitialLongitude="_model.Longitude"
-                                    OnLocationSelected="OnLocationChanged" />
+                    <Derman.Web.Components.Shared.LocationPicker InitialLatitude="_model.Latitude"
+                                                                 InitialLongitude="_model.Longitude" OnLocationSelected="OnLocationChanged" />
                 </div>
 
                 <button type="submit" class="btn btn-primary" disabled="@_isLoading">
